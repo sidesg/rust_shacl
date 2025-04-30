@@ -1,0 +1,7 @@
+[package]
+name = "rust_shacl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sophia = { version = "0.9.0", features = ["jsonld", "xml"] }
