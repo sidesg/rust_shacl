@@ -6,6 +6,7 @@ use sophia::turtle::serializer::turtle::TurtleSerializer;
 use sophia::xml::serializer::RdfXmlSerializer;
 use sophia::api::serializer::{TripleSerializer, QuadSerializer};
 use sophia::api::prelude::Stringifier;
+use uuid::Uuid;
 
 pub struct NodeShape {
     shape_uri: IriRef<String>,
@@ -32,9 +33,8 @@ impl NodeShape {
             IriRef::new_unchecked("http://www.w3.org/ns/shacl#targetClass".to_owned()), 
             &self.taget_class)?;
 
-        for (i, property) in self.properties.iter().enumerate() {
-            let bid = format!("b{}", i);
-            let prop_bn = BnodeId::new_unchecked(bid);
+        for property in self.properties.iter() {
+            let prop_bn = BnodeId::new_unchecked(Uuid::new_v4().to_string());
             graph.insert(
                 &self.shape_uri, 
                 IriRef::new_unchecked("http://www.w3.org/ns/shacl#property".to_owned()), 
@@ -42,8 +42,27 @@ impl NodeShape {
 
             graph.insert(
                 &prop_bn, 
-                IriRef::new_unchecked("http://www.w3.org/ns/shacl#property".to_owned()), 
+                IriRef::new_unchecked("http://www.w3.org/ns/shacl#path".to_owned()), 
                 &property.path)?;
+
+            match &property.ptype {
+                PropertyType::Class(classes) => {
+                    for class in classes.iter() {
+                        graph.insert(
+                            &prop_bn,
+                            IriRef::new_unchecked("http://www.w3.org/ns/shacl#class".to_owned()), 
+                            class)?;
+                    }
+                },
+                PropertyType::MaxCount(_max_count) => {},
+                PropertyType::MinCount(min_count) => {
+                    graph.insert(
+                        &prop_bn, 
+                        IriRef::new_unchecked("http://www.w3.org/ns/shacl#minCount".to_owned()), 
+                        *min_count)?;
+                }
+                PropertyType::DataType(_data_type) => {}
+            }
         };
 
         match serializer {
@@ -84,14 +103,40 @@ impl NodeShape {
     }
 }
 
+enum PropertyType {
+    MaxCount(usize),
+    MinCount(usize),
+    Class(Vec<IriRef<String>>),
+    DataType(DataTypes)
+}
+
+enum DataTypes {
+    Integer,
+    String
+}
 
 pub struct Property {
-    path: IriRef<String>
+    path: IriRef<String>,
+    ptype: PropertyType
 }
 
 impl Property {
-    pub fn new(path: IriRef<String>) -> Self {
-        Property { path: path }
+    pub fn new_class_target(path: IriRef<String>, class_target: Vec<&str>) -> Self {
+        Property { 
+            path: path, 
+            ptype: PropertyType::Class(
+                class_target.iter()
+                    .map(|t| IriRef::new(t.to_string()).unwrap())
+                    .collect()
+            ) 
+        }
+    }
+
+    pub fn new_min_count(path: IriRef<String>, min_count: usize) -> Self {
+        Property {
+             path: path,
+             ptype: PropertyType::MinCount(min_count)
+        }
     }
 }
 
