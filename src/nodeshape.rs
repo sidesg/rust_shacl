@@ -8,6 +8,8 @@ use sophia::api::serializer::{TripleSerializer, QuadSerializer};
 use sophia::api::prelude::Stringifier;
 use uuid::Uuid;
 
+use crate::property::{DataType, Property, TargetType};
+
 pub struct NodeShape {
     shape_uri: IriRef<String>,
     taget_class: IriRef<String>,
@@ -15,8 +17,12 @@ pub struct NodeShape {
 }
 
 impl NodeShape {
-    pub fn new(shape_uri: IriRef<String>, target_class: IriRef<String>, properties: Vec<Property>) -> Self {
-        NodeShape { shape_uri: shape_uri, taget_class: target_class, properties: properties }
+    pub fn new(shape_uri: &str, target_class: &str, properties: Vec<Property>) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(NodeShape { 
+            shape_uri: IriRef::new(shape_uri.to_string())?, 
+            taget_class: IriRef::new(target_class.to_string())?, 
+            properties: properties 
+        })
     }
 
 
@@ -25,43 +31,69 @@ impl NodeShape {
 
         graph.insert(
             &self.shape_uri, 
-            IriRef::new_unchecked("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".to_owned()), 
-            IriRef::new_unchecked("http://www.w3.org/ns/shacl#NodeShape".to_string()))?;
+            IriRef::new_unchecked("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), 
+            IriRef::new_unchecked("http://www.w3.org/ns/shacl#NodeShape"))?;
 
         graph.insert(
             &self.shape_uri, 
-            IriRef::new_unchecked("http://www.w3.org/ns/shacl#targetClass".to_owned()), 
+            IriRef::new_unchecked("http://www.w3.org/ns/shacl#targetClass"), 
             &self.taget_class)?;
 
         for property in self.properties.iter() {
             let prop_bn = BnodeId::new_unchecked(Uuid::new_v4().to_string());
             graph.insert(
                 &self.shape_uri, 
-                IriRef::new_unchecked("http://www.w3.org/ns/shacl#property".to_owned()), 
+                IriRef::new_unchecked("http://www.w3.org/ns/shacl#property"), 
                 &prop_bn)?;
-
+            
             graph.insert(
                 &prop_bn, 
-                IriRef::new_unchecked("http://www.w3.org/ns/shacl#path".to_owned()), 
+                IriRef::new_unchecked("http://www.w3.org/ns/shacl#path"), 
                 &property.path)?;
 
-            match &property.ptype {
-                PropertyType::Class(classes) => {
-                    for class in classes.iter() {
-                        graph.insert(
-                            &prop_bn,
-                            IriRef::new_unchecked("http://www.w3.org/ns/shacl#class".to_owned()), 
-                            class)?;
+            if let Some(target) = &property.target {
+                match target {
+                    TargetType::Class(classes) => {
+                        for class in classes.iter() {
+                            graph.insert(
+                                &prop_bn,
+                                IriRef::new_unchecked("http://www.w3.org/ns/shacl#class"), 
+                                class)?;
+                        }
+                    },
+                    TargetType::DataType(datatype) => {
+                        match datatype {
+                            DataType::Integer => {
+                                graph.insert(
+                                    &prop_bn, 
+                                    IriRef::new_unchecked("http://www.w3.org/ns/shacl#datatype"), 
+                                    IriRef::new_unchecked("http://www.w3.org/2001/XMLSchema#integer")
+                                )?;
+                            },
+                            DataType::String => {
+                                graph.insert(
+                                    &prop_bn, 
+                                    IriRef::new_unchecked("http://www.w3.org/ns/shacl#datatype"), 
+                                    IriRef::new_unchecked("http://www.w3.org/2001/XMLSchema#string")
+                                )?;
+                            }
+                        }
                     }
-                },
-                PropertyType::MaxCount(_max_count) => {},
-                PropertyType::MinCount(min_count) => {
+                }
+
+                if let Some(min_count) = property.min_count {
                     graph.insert(
                         &prop_bn, 
-                        IriRef::new_unchecked("http://www.w3.org/ns/shacl#minCount".to_owned()), 
-                        *min_count)?;
+                        IriRef::new_unchecked("http://www.w3.org/ns/shacl#minCount"), 
+                        min_count)?;
                 }
-                PropertyType::DataType(_data_type) => {}
+
+                if let Some(max_count) = property.max_count {
+                    graph.insert(
+                        &prop_bn, 
+                        IriRef::new_unchecked("http://www.w3.org/ns/shacl#maxCount"), 
+                        max_count)?;
+                }
             }
         };
 
@@ -100,43 +132,6 @@ impl NodeShape {
             .serialize_graph(&graph)?
             .to_string();
         Ok(text)
-    }
-}
-
-enum PropertyType {
-    MaxCount(usize),
-    MinCount(usize),
-    Class(Vec<IriRef<String>>),
-    DataType(DataTypes)
-}
-
-enum DataTypes {
-    Integer,
-    String
-}
-
-pub struct Property {
-    path: IriRef<String>,
-    ptype: PropertyType
-}
-
-impl Property {
-    pub fn new_class_target(path: IriRef<String>, class_target: Vec<&str>) -> Self {
-        Property { 
-            path: path, 
-            ptype: PropertyType::Class(
-                class_target.iter()
-                    .map(|t| IriRef::new(t.to_string()).unwrap())
-                    .collect()
-            ) 
-        }
-    }
-
-    pub fn new_min_count(path: IriRef<String>, min_count: usize) -> Self {
-        Property {
-             path: path,
-             ptype: PropertyType::MinCount(min_count)
-        }
     }
 }
 
