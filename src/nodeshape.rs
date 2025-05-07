@@ -25,8 +25,11 @@ impl NodeShape {
         })
     }
 
+    pub fn add_property(&mut self, property: Property) {
+        self.properties.push(property);
+    }
 
-    pub fn to_shacl_string(&self, serializer: Serializer) -> Result<String, Box<dyn std::error::Error>> {
+    fn build_graph(&self) -> Result<LightGraph, Box<dyn std::error::Error>> {
         let mut graph = LightGraph::new();
 
         graph.insert(
@@ -96,21 +99,12 @@ impl NodeShape {
                 }
             }
         };
-
-        match serializer {
-            Serializer::Jsonld => {
-                self.serialize_jsonld(graph)
-            },
-            Serializer::Ttl => {
-                self.serialize_ttl(graph)
-            },
-            Serializer::Xml => {
-                self.serialize_xml(graph)
-            }
-        }
+        Ok(graph)
     }
 
-    fn serialize_jsonld(&self, graph: LightGraph) -> Result<String, Box<dyn std::error::Error>> {
+
+    pub fn serialize_jsonld(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let graph = self.build_graph()?;
         let mut serializer = JsonLdSerializer::new_stringifier();
         let text = serializer
             .serialize_dataset(&graph.as_dataset())?
@@ -118,7 +112,8 @@ impl NodeShape {
         Ok(text)
     }
 
-    fn serialize_ttl(&self, graph: LightGraph) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn serialize_ttl(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let graph = self.build_graph()?;
         let mut serializer = TurtleSerializer::new_stringifier();
         let text = serializer
             .serialize_graph(&graph)?
@@ -126,17 +121,12 @@ impl NodeShape {
         Ok(text)
     }
 
-    fn serialize_xml(&self, graph: LightGraph) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn serialize_xml(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let graph = self.build_graph()?;
         let mut serializer = RdfXmlSerializer::new_stringifier();
         let text = serializer
             .serialize_graph(&graph)?
             .to_string();
         Ok(text)
     }
-}
-
-pub enum Serializer {
-    Ttl,
-    Jsonld,
-    Xml
 }

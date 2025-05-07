@@ -36,8 +36,12 @@ impl Property {
         self.max_count = Some(max_count);
     }
 
-    pub fn add_data_type(&mut self, datatype: DataType) {
-        self.target = Some(TargetType::DataType(datatype));
+    pub fn add_datatype_string(&mut self) {
+        self.target = Some(TargetType::DataType(DataType::String));
+    }
+
+    pub fn add_datatype_int(&mut self) {
+        self.target = Some(TargetType::DataType(DataType::Integer));
     }
 }
 
